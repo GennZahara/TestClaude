@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import * as logger from "firebase-functions/logger";
 import { admin, db } from "./admin";
 import { Paper } from "./types";
@@ -32,31 +32,29 @@ ${paper.abstract}
 이 연구를 실제로 활용할 수 있는 구체적인 사례 2~3가지를 제시하고, 그중 하나에 대한 간단한 Python 샘플 코드(또는 의사코드)를 작성해주세요. 코드에는 한국어 주석을 달아주세요.`;
 }
 
+const SYSTEM_INSTRUCTION = `당신은 컴퓨터 과학 최신 연구를 분석하는 전문가입니다.
+cs.GR(컴퓨터 그래픽스)와 cs.SD(음향/음악 컴퓨팅) 분야의 논문을 정확하게 이해하고,
+핵심 내용을 한국어로 요약하며 실용적인 적용 방안을 제시합니다.
+모든 응답은 한국어로 작성하고, 마크다운 형식을 사용합니다.`;
+
 /**
- * 단일 논문을 Claude API로 요약
+ * 단일 논문을 Gemini API로 요약
  */
 async function summarizePaper(
   paper: Paper,
-  anthropic: Anthropic
+  genAI: GoogleGenerativeAI
 ): Promise<{ summary: string; applicationSample: string }> {
-  const stream = anthropic.messages.stream({
-    model: "claude-opus-4-6",
-    max_tokens: 2048,
-    thinking: { type: "adaptive" },
-    system: `당신은 컴퓨터 과학 최신 연구를 분석하는 전문가입니다.
-cs.GR(컴퓨터 그래픽스)와 cs.SD(음향/음악 컴퓨팅) 분야의 논문을 정확하게 이해하고,
-핵심 내용을 한국어로 요약하며 실용적인 적용 방안을 제시합니다.
-모든 응답은 한국어로 작성하고, 마크다운 형식을 사용합니다.`,
-    messages: [{ role: "user", content: buildPrompt(paper) }],
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.0-flash",
+    systemInstruction: SYSTEM_INSTRUCTION,
+    generationConfig: {
+      maxOutputTokens: 2048,
+      temperature: 0.7,
+    },
   });
 
-  const finalMessage = await stream.finalMessage();
-
-  // thinking 블록 제외하고 text만 추출
-  const fullText = finalMessage.content
-    .filter((block): block is Anthropic.TextBlock => block.type === "text")
-    .map((block) => block.text)
-    .join("");
+  const result = await model.generateContent(buildPrompt(paper));
+  const fullText = result.response.text();
 
   // 섹션 분리
   const summaryMatch = fullText.match(
@@ -76,15 +74,15 @@ cs.GR(컴퓨터 그래픽스)와 cs.SD(음향/음악 컴퓨팅) 분야의 논문
  * 요약 대기 중인 논문 일괄 처리 (Cloud Functions에서 호출)
  */
 export async function summarizePapers(): Promise<{ succeeded: number; failed: number }> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error(
-      "ANTHROPIC_API_KEY 환경변수가 설정되지 않았습니다. " +
-        "firebase functions:secrets:set ANTHROPIC_API_KEY 로 설정해주세요."
+      "GEMINI_API_KEY 환경변수가 설정되지 않았습니다. " +
+        "firebase functions:secrets:set GEMINI_API_KEY 로 설정해주세요."
     );
   }
 
-  const anthropic = new Anthropic({ apiKey });
+  const genAI = new GoogleGenerativeAI(apiKey);
 
   // 'raw' 상태 논문 조회 (오래된 것 먼저)
   const snapshot = await db
@@ -110,7 +108,7 @@ export async function summarizePapers(): Promise<{ succeeded: number; failed: nu
     try {
       logger.info(`요약 시작: ${paper.arxivId} — ${paper.title.slice(0, 60)}...`);
 
-      const { summary, applicationSample } = await summarizePaper(paper, anthropic);
+      const { summary, applicationSample } = await summarizePaper(paper, genAI);
 
       await doc.ref.update({
         summary,

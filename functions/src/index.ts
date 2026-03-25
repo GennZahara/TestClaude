@@ -7,7 +7,7 @@ import { crawlArxiv } from "./crawl";
 import { summarizePapers } from "./summarize";
 
 const REGION = "asia-northeast3"; // 서울 리전
-const anthropicApiKey = defineSecret("ANTHROPIC_API_KEY");
+const geminiApiKey = defineSecret("GEMINI_API_KEY");
 
 // ─── 스케줄 함수 ──────────────────────────────────────────────────────────────
 
@@ -41,7 +41,7 @@ export const scheduledSummarize = onSchedule(
     region: REGION,
     timeoutSeconds: 540, // 9분 (최대 9분 실행)
     memory: "512MiB",
-    secrets: [anthropicApiKey],
+    secrets: [geminiApiKey],
   },
   async () => {
     logger.info("스케줄 요약 시작");
@@ -80,7 +80,7 @@ export const manualSummarize = onRequest(
     timeoutSeconds: 540,
     memory: "512MiB",
     cors: true,
-    secrets: [anthropicApiKey],
+    secrets: [geminiApiKey],
   },
   async (req, res) => {
     try {

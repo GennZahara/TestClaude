@@ -32,11 +32,12 @@ Firebase Console → Firestore Database → "데이터베이스 만들기"
 
 ---
 
-## 3단계: Claude API 키 등록 (Secret Manager)
+## 3단계: Gemini API 키 등록 (Secret Manager)
 
 ```bash
-# ANTHROPIC_API_KEY를 Firebase Secret Manager에 저장
-firebase functions:secrets:set ANTHROPIC_API_KEY
+# Google AI Studio에서 키 발급: https://aistudio.google.com/app/apikey
+# GEMINI_API_KEY를 Firebase Secret Manager에 저장
+firebase functions:secrets:set GEMINI_API_KEY
 # 프롬프트에 API 키 입력
 ```
 
